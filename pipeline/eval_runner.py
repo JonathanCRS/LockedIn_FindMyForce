@@ -38,21 +38,16 @@ def guess_hostile_type(features: dict) -> str:
     ask_ratio = features.get("ask_ratio", 0.0)
 
     # Pulsed signals (Radars) have low duty cycle (lots of silent gaps)
-    if duty_cycle < 0.6:
-        # We don't have enough fidelity to perfectly separate the three radar types
-        # without training data, so we'll guess Airborne-detection as a default pulsed radar.
+    if duty_cycle < 0.8:
         return "Airborne-detection"
     
     # Jammers are broad-band noise, which means high spectral flatness
-    if flatness > 0.4:
+    if flatness > 0.2:
         return "EW-Jammer"
     
-    # AM radio has continuous amplitude variation but isn't a digital ASK pulse
-    if ask_ratio > 0.1 and ask_ratio < 0.8:
-        return "AM radio"
-
-    # Fallback to a common hostile type if we aren't sure
-    return "EW-Jammer"
+    # If it's continuous (high duty cycle) and localized in frequency (low flatness),
+    # it's very likely civilian AM radio.
+    return "AM radio"
 
 def run_evaluation_pipeline():
     """Main evaluation execution flow."""
