@@ -110,43 +110,53 @@ def run_evaluation_pipeline():
     logger.info(f"Retrieved {len(eval_obs)} observations for scoring.")
 
     submissions = []
-    logger.info("Classifying observations...")
+    logger.info("Classifying and associating observations...")
     
-    # Process observations in batches to speed up feature extraction
+    from pipeline.associator import ObservationAssociator
+    associator = ObservationAssociator()
+    
+    # Process and build temporal observation groups
     for idx, obs in enumerate(eval_obs):
-        obs_id = obs["observation_id"]
-        recv_id = obs["receiver_id"]
-        iq = obs["iq_snapshot"]
-
         # Run classifier
-        clf_result = classifier.predict(iq)
+        clf_result = classifier.predict(obs.get("iq_snapshot", []))
         
         # Determine final label
         final_label = clf_result["label"]
-        if clf_result["is_anomaly"] or final_label == "unknown":
+        if clf_result.get("is_anomaly") or final_label == "unknown":
             final_label = guess_hostile_type(clf_result.get("features", {}))
-
-        # Basic Single-Receiver Geolocation
-        lat, lon = None, None
-        rssi = obs.get("rssi_dbm")
-        if rssi is not None and recv_id in geo.receivers:
-            recv = geo.receivers[recv_id]
-            # Estimate distance
-            distance = geo._rssi_to_distance(rssi)
-            # Default to the receiver's location as a highly naive estimate
-            # (In a real system we'd associate obs across receivers, but the eval feed is flat)
-            lat, lon = recv["lat"], recv["lon"]
-
-        submissions.append({
-            "observation_id": obs_id,
-            "classification_label": final_label,
-            "confidence": clf_result["confidence"],
-            "estimated_latitude": lat,
-            "estimated_longitude": lon,
-        })
+            
+        # Update classification dict so associator can use the final mapped heuristic label
+        clf_result["label"] = final_label
+        
+        # Feed into associator
+        associator.add_observation(obs, clf_result)
 
         if (idx + 1) % 500 == 0:
-            logger.info(f"Processed {idx + 1}/{len(eval_obs)} observations...")
+            logger.info(f"Processed {idx + 1}/{len(eval_obs)} initial classifications...")
+
+    # Force all remaining observations in the buffer into groups
+    groups = associator.flush_all()
+    logger.info(f"Formed {len(groups)} distinct emitter groups from {len(eval_obs)} observations.")
+
+    logger.info("Geolocating groups and preparing final payload...")
+    for group in groups:
+        # Geolocate the entire group using TDoA or multi-receiver RSSI
+        geo_result = geo.geolocate(group.observations)
+        
+        # Fallback to None if geolocation fails completely
+        lat = geo_result.latitude if geo_result else None
+        lon = geo_result.longitude if geo_result else None
+        
+        # All individual observations within this group share the same predicted coordinates 
+        # and benefit from the group's highest-confidence classification label
+        for obs in group.observations:
+            submissions.append({
+                "observation_id": obs["observation_id"],
+                "classification_label": group.classification_label,
+                "confidence": group.classification_confidence,
+                "estimated_latitude": lat,
+                "estimated_longitude": lon,
+            })
 
     logger.info(f"Submitting {len(submissions)} classifications for official scoring...")
     
