@@ -507,7 +507,13 @@ function addObservationToFeed(obs) {
     const affil = inferAffiliation(label);
     const conf = cls ? `${(cls.confidence * 100).toFixed(0)}%` : '–';
     const rssi = obs.rssi_dbm ? `${obs.rssi_dbm.toFixed(1)} dBm` : '–';
-    const time = new Date().toTimeString().slice(0, 8);
+    const time = new Date().toLocaleTimeString('en-CA', {
+        timeZone: 'America/Vancouver',
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    }) + ' PST';
 
     // Remove empty state if present
     const empty = feed.querySelector('.empty-state');
