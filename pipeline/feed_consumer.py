@@ -137,6 +137,13 @@ class FeedConsumer:
 
         # 1. Classify the signal
         classification = self.classifier.predict(obs.get("iq_snapshot", []))
+        
+        # Apply heuristic mapping for anomalies so the dashboard displays them properly
+        final_label = classification.get("label", "unknown")
+        if classification.get("is_anomaly") or final_label == "unknown":
+            from pipeline.eval_runner import guess_hostile_type
+            final_label = guess_hostile_type(classification.get("features", {}))
+            classification["label"] = final_label
 
         # 2. Enrich observation
         obs["_classification"] = classification

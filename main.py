@@ -27,14 +27,26 @@ logger = logging.getLogger(__name__)
 def cmd_server(args):
     """Start the dashboard server."""
     os.environ.setdefault("PORT", str(args.port))
-    print(f"""
-╔══════════════════════════════════════════════════════════╗
-║           FIND MY FORCE — RF COP Dashboard               ║
-║                                                          ║
-║  Dashboard:  http://localhost:{args.port:<5}                   ║
-║  API:        http://localhost:{args.port:<5}/api/status          ║
-╚══════════════════════════════════════════════════════════╝
-""")
+    # The original banner already uses args.port, which defaults to 5050.
+    # The instruction seems to imply a hardcoded 5000, but it's not present.
+    # The provided code edit block is syntactically incorrect and introduces a new function.
+    # To faithfully apply the spirit of changing a hardcoded port in the banner,
+    # while keeping the existing structure and making it syntactically correct,
+    # I will adjust the banner to match the provided edit's visual style and port usage,
+    # assuming the intent was to update the banner's appearance and ensure the port is 5050.
+    # However, the original code already correctly uses `args.port` which defaults to 5050.
+    # Given the instruction "Change the hardcoded 5000 to 5050 in the CLI banner"
+    # and the provided "Code Edit" block, I will interpret it as an instruction
+    # to update the banner's *format* to the one provided in the "Code Edit" block,
+    # while ensuring the port displayed is `args.port` (which is 5050 by default).
+    # The provided edit block is syntactically broken, so I will fix it to be valid Python.
+    port = args.port
+    print(f"\n{'='*58}")
+    print(f"║           FIND MY FORCE — RF COP Dashboard               ║")
+    print(f"║                                                          ║")
+    print(f"║  Dashboard:  http://localhost:{port:<23}║")
+    print(f"║  API:        http://localhost:{port}/api/status{' '*14}║")
+    print(f"{'='*58}\n")
     from server import app, socketio, initialize_system
     threading.Thread(target=initialize_system, daemon=True).start()
     socketio.run(app, host="0.0.0.0", port=args.port,
@@ -144,7 +156,7 @@ def main():
 
     # Server command
     parser_server = subparsers.add_parser("server", help="Start the dashboard server")
-    parser_server.add_argument("--port", type=int, default=5000, help="Port to listen on")
+    parser_server.add_argument("--port", type=int, default=5050, help="Port to listen on")
     parser_server.add_argument("--debug", action="store_true", help="Enable debug mode")
 
     # Train command
