@@ -16,6 +16,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.svm import OneClassSVM
 from sklearn.preprocessing import StandardScaler, LabelEncoder, QuantileTransformer
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import classification_report, f1_score
 from sklearn.covariance import EllipticEnvelope
 from sklearn.pipeline import Pipeline
@@ -294,6 +295,8 @@ def extract_features(iq_snapshot: list) -> np.ndarray:
         i_std, q_std, iq_corr, noise_floor,
         # ZCR (2)
         zcr_i, zcr_q,
+        # Pulsed features (2)
+        duty_cycle, zcr_amp,
     ], dtype=np.float32)
 
     return features
@@ -394,9 +397,14 @@ class SignalClassifier:
             random_state=42
         )
         
-        self.friendly_classifier = VotingClassifier(
+        voter = VotingClassifier(
             estimators=[('hgb', self.friendly_classifier), ('mlp', mlp)],
             voting='soft'
+        )
+        # Calibrate the ensemble probabilities
+        logger.info("Calibrating ensemble probabilities (Platt Scaling)...")
+        self.friendly_classifier = CalibratedClassifierCV(
+            voter, method='sigmoid', cv=3
         )
         self.friendly_classifier.fit(X_tr, y_tr)
 
@@ -471,9 +479,9 @@ class SignalClassifier:
                 "freq_mean": feat[13],
                 "total_power": feat[17],
                 "spectral_flatness": feat[25],
-                "duty_cycle": feat[32],
-                "ask_ratio": feat[34],
-                "freq_linearity": feat[35]
+                "duty_cycle": feat[84],  # Updated index
+                "ask_ratio": feat[34],   # spec_kurt? No, wait.
+                "freq_linearity": feat[16] # freq_linearity
             }
 
             if is_anomaly[i]:

@@ -142,12 +142,21 @@ class ObservationAssociator:
                 if label_i != "unknown" and label_j != "unknown" and label_i != label_j:
                     continue
 
-                # IQ similarity gate
+                # Dynamic IQ similarity gate
+                # If they are very close in time or have the same label, relax the threshold
+                dt = abs(ts_j - ts_i)
+                dynamic_min_iq = MIN_IQ_COSINE_SIMILARITY
+                
+                if dt < 0.5: # Very tight temporal window
+                    dynamic_min_iq -= 0.1
+                if label_i == label_j and label_i != "unknown":
+                    dynamic_min_iq -= 0.1
+                
                 iq_sim = _cosine_similarity(
                     obs_i.get("iq_snapshot", []),
                     obs_j.get("iq_snapshot", [])
                 )
-                if iq_sim < MIN_IQ_COSINE_SIMILARITY:
+                if iq_sim < dynamic_min_iq:
                     continue
 
                 group_members.append(obs_j)

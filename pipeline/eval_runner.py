@@ -35,27 +35,40 @@ def guess_hostile_type(features: dict) -> str:
     """
     duty_cycle = features.get("duty_cycle", 1.0)
     flatness = features.get("spectral_flatness", 0.0)
-    # 1. Jammers are broad-band white noise (high spectral flatness)
-    if flatness > 0.3:
+    freq_std = features.get("freq_std", 0.0)
+    amp_std = features.get("amp_std", 0.0)
+    
+    # 1. Jammers: broadband white noise (very high flatness)
+    if flatness > 0.4:
         return "EW-Jammer"
         
-    # 2. AM Radio has a continuous carrier wave (very high duty cycle > 0.90)
+    # 2. DSSS (Wi-Fi / Zigbee): wideband pulse-like, mid-high flatness
+    if flatness > 0.22:
+        # Zigbee is lower bandwidth than Wi-Fi typically
+        if flatness > 0.28:
+            return "IEEE802.11bg" # Wi-Fi
+        return "IEEE802.15.4" # Zigbee
+        
+    # 3. GFSK (Bluetooth): Constant amplitude, low frequency variance, high duty cycle
+    if duty_cycle > 0.95 and amp_std < 0.05:
+        return "Bluetooth"
+        
+    # 4. AM Radio: high duty cycle, but higher amplitude variance than GFSK
     if duty_cycle > 0.90:
         return "AM radio"
         
-    # 3. Pulsed radars have silent gaps between pings (duty cycle < 0.85)
-    # Based on live feed sampling, there are exactly 3 distinct populations:
-    # A) Duty cycle ~0.50 -> Air-Ground-MTI
-    if duty_cycle < 0.60:
-        return "Air-Ground-MTI"
+    # 5. Pulsed radars (duty cycle < 0.85)
+    if duty_cycle < 0.85:
+        if duty_cycle < 0.60:
+            return "Air-Ground-MTI"
         
-    # B) Duty cycle ~0.70 with strong negative Frequency Linearity (Chirped pulse) -> Airborne-range
-    freq_linearity = features.get("freq_linearity", 0.0)
-    if freq_linearity < -0.10:
-        return "Airborne-range"
-        
-    # C) Duty cycle ~0.70 with zero or positive linearity -> Airborne-detection
-    return "Airborne-detection"
+        freq_linearity = features.get("freq_linearity", 0.0)
+        if freq_linearity < -0.10:
+            return "Airborne-range"
+        return "Airborne-detection"
+
+    # Default fallback
+    return "unknown"
 
 def run_evaluation_pipeline():
     """Main evaluation execution flow."""
