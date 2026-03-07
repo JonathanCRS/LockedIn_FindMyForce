@@ -117,40 +117,47 @@ def cmd_score(args):
         return
 
     print(f"\n{'='*50}")
-    print(f"  TEAM: {score.get('team_name', '–')}")
-    print(f"{'='*50}")
-    print(f"  Total Score:         {score.get('total_score', 0):.1f}")
-    print(f"  Classification:      {score.get('classification_score', 0):.1f}  (40%)")
-    print(f"  Geolocation:         {score.get('geolocation_score', 0):.1f}  (30%)")
-    print(f"  Novelty Detection:   {score.get('novelty_detection_score', 0):.1f}  (30%)")
-    print(f"  Submissions:         {score.get('submissions_count', 0)}")
-    print(f"  Avg CEP:             {score.get('average_cep_meters', 'N/A')}m")
-    print(f"{'='*50}\n")
+        
+    try:
+        resp = requests.get(f"{api_url}/scores/me", headers={"X-API-Key": api_key})
+        resp.raise_for_status()
+        result = resp.json()
+        
+        print("\n=== CURRENT SCORE ===")
+        print(f"Total: {result.get('total_score', 0):.1f}")
+        print(f"Classification: {result.get('classification_score', 0):.1f}")
+        print(f"Geolocation: {result.get('geolocation_score', 0):.1f}")
+        print(f"Novelty: {result.get('novelty_score', 0):.1f}")
+        print("=====================\n")
+    except Exception as e:
+        logger.error(f"Failed to fetch score: {e}")
 
-    pcs = score.get('per_class_scores', [])
-    if pcs:
-        print("  Per-class scores:")
-        for cls in pcs:
-            print(f"    {cls['label']:<25} F1={cls['f1']:.3f}  count={cls['count']}")
-
+def run_eval():
+    """Run the official evaluation submission pipeline."""
+    from pipeline.eval_runner import run_evaluation_pipeline
+    logger.info("Starting evaluation pipeline...")
+    run_evaluation_pipeline()
 
 def main():
     parser = argparse.ArgumentParser(prog="findmyforce", description="Find My Force RF COP System")
-    sub = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Server command
-    srv_p = sub.add_parser("server", help="Start the dashboard server")
-    srv_p.add_argument("--port", type=int, default=5000, help="Port to listen on")
-    srv_p.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser_server = subparsers.add_parser("server", help="Start the dashboard server")
+    parser_server.add_argument("--port", type=int, default=5000, help="Port to listen on")
+    parser_server.add_argument("--debug", action="store_true", help="Enable debug mode")
 
     # Train command
-    train_p = sub.add_parser("train", help="Train the ML classifier")
+    parser_train = subparsers.add_parser("train", help="Train the ML classifier")
 
     # Stream command
-    stream_p = sub.add_parser("stream", help="Stream live observations (debug)")
+    parser_stream = subparsers.add_parser("stream", help="Stream live observations (debug)")
 
     # Score command
-    score_p = sub.add_parser("score", help="Fetch team score")
+    parser_score = subparsers.add_parser("score", help="Fetch team score")
+
+    # Eval command
+    parser_eval = subparsers.add_parser("eval", help="Run the official evaluation submission pipeline")
 
     args = parser.parse_args()
 
@@ -161,7 +168,9 @@ def main():
     elif args.command == "stream":
         cmd_stream(args)
     elif args.command == "score":
-        cmd_score(args)
+        get_score()
+    elif args.command == "eval":
+        run_eval()
 
 
 if __name__ == "__main__":

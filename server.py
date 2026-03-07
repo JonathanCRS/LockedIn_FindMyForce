@@ -43,6 +43,40 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, static_folder=str(ROOT_DIR / "dashboard" / "static"))
 app.config["SECRET_KEY"] = os.urandom(24)
 CORS(app)
+
+@app.route("/api/score/fetch", methods=["GET"])
+def fetch_score():
+    """Fetch current official score from the backend API."""
+    import requests
+    api_key = os.getenv("API_KEY")
+    api_url = os.getenv("API_URL", "https://findmyforce.online")
+    if not api_key:
+        return jsonify({"error": "Missing API Key"}), 401
+        
+    try:
+        resp = requests.get(f"{api_url}/scores/me", headers={"X-API-Key": api_key}, timeout=10)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/eval/run", methods=["POST"])
+def run_eval():
+    """Trigger the official evaluation pipeline run."""
+    try:
+        from pipeline.eval_runner import run_evaluation_pipeline
+        # We run it in a separate thread so we can return quickly to the UI
+        import threading
+        t = threading.Thread(target=run_evaluation_pipeline)
+        t.start()
+        return jsonify({"status": "Evaluation calculation started. Check logs for completion."})
+    except Exception as e:
+        logger.error(f"Error starting evaluation: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# =========================================================================
+# Socket.IO Handlers
+# =========================================================================
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # ── Global State ──────────────────────────────────────────────────────────────

@@ -295,6 +295,18 @@ class SignalClassifier:
 
         results = []
         for i in range(len(X)):
+            # Reconstruct feature dict for heuristic classification
+            feat = X[i]
+            features_dict = {
+                "amp_std": feat[1],
+                "freq_mean": feat[13],
+                "total_power": feat[17],
+                "spectral_flatness": feat[25],
+                "duty_cycle": feat[32],
+                "ask_ratio": feat[34],
+                "freq_linearity": feat[35]
+            }
+
             if is_anomaly[i]:
                 # Out-of-distribution: likely hostile or civilian
                 # Use confidence to determine how "unknown" it is
@@ -311,6 +323,7 @@ class SignalClassifier:
                     "friendly_guess": str(pred_labels[i]),
                     "friendly_confidence": round(friendly_conf, 3),
                     "ood_score": round(float(ood_scores[i]), 4),
+                    "features": features_dict,
                 })
             else:
                 results.append({
@@ -321,6 +334,7 @@ class SignalClassifier:
                     "friendly_guess": str(pred_labels[i]),
                     "friendly_confidence": round(float(confidences[i]), 3),
                     "ood_score": round(float(ood_scores[i]), 4),
+                    "features": features_dict,
                 })
 
         return results
