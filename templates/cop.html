@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Find My Force COP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='cop.css') }}" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>Find My Force COP</h1>
+        <p>Live RF Association and Geolocation</p>
+      </div>
+      <div id="statusPill" class="pill pill-warn">Connecting...</div>
+    </header>
+
+    <section class="hud">
+      <div class="card metric">
+        <span class="label">Receivers</span>
+        <span id="metricReceivers" class="value">-</span>
+      </div>
+      <div class="card metric">
+        <span class="label">Active Tracks</span>
+        <span id="metricTracks" class="value">-</span>
+      </div>
+      <div class="card metric">
+        <span class="label">Latest Time (UTC)</span>
+        <span id="metricTime" class="value mono">-</span>
+      </div>
+    </section>
+
+    <main class="layout">
+      <section class="map-wrap">
+        <div id="map"></div>
+        <div class="legend card">
+          <div class="legend-title">Legend</div>
+          <div class="legend-item"><span class="dot friendly"></span>Friendly / Known</div>
+          <div class="legend-item"><span class="dot hostile"></span>Hostile</div>
+          <div class="legend-item"><span class="dot civilian"></span>Civilian</div>
+          <div class="legend-item"><span class="dot receiver"></span>Receiver Node</div>
+          <div class="legend-item"><span class="ring"></span>Uncertainty Radius</div>
+        </div>
+      </section>
+
+      <aside class="panel card">
+        <div class="panel-head">
+          <h2>Latest Observations</h2>
+          <span id="obsCount" class="mono">0</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>UTC</th>
+                <th>RX</th>
+                <th>Faction</th>
+                <th>Signal Type</th>
+                <th>Mod</th>
+                <th>Conf</th>
+                <th>RSSI</th>
+                <th>SNR</th>
+              </tr>
+            </thead>
+            <tbody id="obsBody"></tbody>
+          </table>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='cop.js') }}"></script>
+</body>
+</html>
