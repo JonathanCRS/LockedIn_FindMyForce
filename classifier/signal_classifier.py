@@ -11,7 +11,7 @@ import os
 import logging
 from pathlib import Path
 
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, HistGradientBoostingClassifier, VotingClassifier
 from sklearn.svm import OneClassSVM
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
@@ -109,12 +109,25 @@ def extract_features(iq_snapshot: list) -> np.ndarray:
     # Top 5 spectral peaks
     top5_peaks = np.sort(spectrum_norm[:64])[-5:][::-1]
 
-    # ── Pulsed signal features ───────────────────────────────────────
-    threshold = amp_mean * 0.5
-    above = amplitude > threshold
+    # ── Noise floor estimate ─────────────────────────────────────────
+    sorted_amp = np.sort(amplitude)
+    noise_floor = np.mean(sorted_amp[:16])  # Bottom 12.5% = noise
+    peak_to_noise = amp_max / (noise_floor + 1e-10)
+
+    # ── Pulsed signal features (Low-SNR Robust) ──────────────────────
+    # Use a threshold that adapts to the noise floor rather than the mean
+    if peak_to_noise > 3.0:
+        # Strong signal: threshold halfway between noise and peak
+        pulse_threshold = noise_floor + (amp_max - noise_floor) * 0.3
+    else:
+        # Weak signal: tighter threshold near noise floor
+        pulse_threshold = noise_floor * 1.5
+
+    above = amplitude > pulse_threshold
     duty_cycle = np.mean(above)
+
     # Zero crossings of amplitude envelope (proxy for pulse transitions)
-    amp_centered = amplitude - amp_mean
+    amp_centered = amplitude - pulse_threshold
     zcr_amp = np.sum(np.diff(np.sign(amp_centered)) != 0) / len(amplitude)
 
     # ── BPSK detection (phase transitions of ~180°) ──────────────────
@@ -126,6 +139,14 @@ def extract_features(iq_snapshot: list) -> np.ndarray:
     # ── ASK detection (amplitude on/off pattern) ─────────────────────
     ask_ratio = amp_std / (amp_mean + 1e-10)
 
+    # ── Advanced Features for Satcom/Radar distinction ───────────────
+    # Spectral Rolloff (85% of total power)
+    cum_spec = np.cumsum(spectrum_norm)
+    spec_rolloff = float(np.searchsorted(cum_spec, 0.85)) / len(spectrum_norm)
+    
+    # Peak-to-Average Power Ratio (PAPR)
+    papr = float(amp_max**2 / (total_power + 1e-10))
+
     # ── Higher-order statistics ──────────────────────────────────────
     i_std = np.std(I)
     q_std = np.std(Q)
@@ -134,10 +155,6 @@ def extract_features(iq_snapshot: list) -> np.ndarray:
     # ── Zero-crossing rate of raw I and Q ────────────────────────────
     zcr_i = np.sum(np.diff(np.sign(I)) != 0) / len(I)
     zcr_q = np.sum(np.diff(np.sign(Q)) != 0) / len(Q)
-
-    # ── Noise floor estimate ─────────────────────────────────────────
-    sorted_amp = np.sort(amplitude)
-    noise_floor = np.mean(sorted_amp[:16])  # Bottom 12.5% = noise
 
     features = np.array([
         # Amplitude stats (8)
@@ -155,8 +172,9 @@ def extract_features(iq_snapshot: list) -> np.ndarray:
         spectral_centroid, spectral_flatness, peak_freq_idx,
         # Top 5 spectral peaks (5)
         *top5_peaks,
-        # Pulsed/modulation features (4)
+        # Pulsed/modulation features (6)
         duty_cycle, zcr_amp, ask_ratio, freq_linearity,
+        spec_rolloff, papr,
         # IQ correlation stats (4)
         i_std, q_std, iq_corr, noise_floor,
         # ZCR (2)
@@ -220,14 +238,26 @@ class SignalClassifier:
             X_scaled, y_enc, test_size=0.2, random_state=42, stratify=y_enc
         )
 
-        # Train multi-class friendly classifier (Random Forest + GB ensemble)
-        self.friendly_classifier = RandomForestClassifier(
-            n_estimators=300,
-            max_depth=None,
-            min_samples_split=2,
+        # Train multi-class friendly classifier (Hybrid Ensemble for maximum score)
+        rf = RandomForestClassifier(
+            n_estimators=200,
+            max_depth=15,
             class_weight="balanced",
             random_state=42,
-            n_jobs=-1,
+            n_jobs=-1
+        )
+        hgb = HistGradientBoostingClassifier(
+            max_iter=400,
+            max_depth=15,
+            learning_rate=0.03,
+            min_samples_leaf=10,
+            l2_regularization=0.5,
+            random_state=42
+        )
+        
+        self.friendly_classifier = VotingClassifier(
+            estimators=[('rf', rf), ('hgb', hgb)],
+            voting='soft'
         )
         self.friendly_classifier.fit(X_tr, y_tr)
 

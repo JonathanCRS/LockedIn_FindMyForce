@@ -124,8 +124,8 @@ class TrackManager:
     MAX_ASSOCIATION_DISTANCE_M = 800.0    # Max position distance for track association
     MAX_ASSOCIATION_TIME_S = 15.0         # Max time gap for association
     CONFIRMATION_UPDATES = 2              # Updates needed to confirm track
-    COAST_TIMEOUT_S = 20.0               # Time before track goes to COASTING
-    LOST_TIMEOUT_S = 60.0                # Time before COASTING track is LOST
+    COAST_TIMEOUT_S = 30.0               # Time before track goes to COASTING
+    LOST_TIMEOUT_S = 180.0                # Keep tracks alive longer to prevent fragmentation
     MAX_HISTORY = 50                      # Position history entries to keep
 
     def __init__(self, ref_lat: float = 49.26, ref_lon: float = -123.25):
@@ -171,15 +171,31 @@ class TrackManager:
 
         for track in self.active_tracks:
             # Time gate
-            time_gap = abs(update.timestamp - track.last_seen)
-            if time_gap > self.MAX_ASSOCIATION_TIME_S:
+            time_gap = update.timestamp - track.last_seen
+            if abs(time_gap) > self.MAX_ASSOCIATION_TIME_S:
                 continue
 
-            # Position gate
-            dist = self._haversine_distance(
-                update.latitude, update.longitude,
-                track.latitude, track.longitude
-            )
+            # Velocity-aided position gate
+            # Use Kalman filter to predict where the track SHOULD be now
+            if time_gap > 0 and track.kalman:
+                vx, vy = track.kalman.velocity
+                # Current local coords
+                x, y = latlon_to_xy(track.latitude, track.longitude, self._ref_lat, self._ref_lon)
+                # Predict forward
+                x_pred = x + vx * time_gap
+                y_pred = y + vy * time_gap
+                lat_pred, lon_pred = xy_to_latlon(x_pred, y_pred, self._ref_lat, self._ref_lon)
+                
+                dist = self._haversine_distance(
+                    update.latitude, update.longitude,
+                    lat_pred, lon_pred
+                )
+            else:
+                dist = self._haversine_distance(
+                    update.latitude, update.longitude,
+                    track.latitude, track.longitude
+                )
+
             if dist > self.MAX_ASSOCIATION_DISTANCE_M:
                 continue
 
@@ -193,7 +209,7 @@ class TrackManager:
             # Score: lower = better association
             # Combine distance and classification similarity
             label_penalty = 0.0 if label_match else 500.0
-            score = dist + label_penalty + time_gap * 10.0
+            score = dist + label_penalty + abs(time_gap) * 10.0
 
             if score < best_score:
                 best_score = score
@@ -237,10 +253,12 @@ class TrackManager:
         """Apply a track update with Kalman filtering."""
         track.observation_count += len(update.observation_ids)
         track.update_count += 1
+        # Kalman predict + update
+        prev_seen = track.last_seen
         track.last_seen = update.timestamp or now
 
-        # Kalman predict + update
-        dt = now - track.last_seen if track.update_count > 1 else 1.0
+        # Calculate time delta for Kalman (important: use PREVOUS last_seen)
+        dt = track.last_seen - prev_seen if track.update_count > 1 else 1.0
         dt = max(0.1, min(dt, 30.0))
         track.kalman.predict(dt)
 

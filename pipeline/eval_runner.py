@@ -113,6 +113,8 @@ def run_evaluation_pipeline():
         eval_obs = eval_data.get("observations", [])
     except Exception as e:
         logger.error(f"Failed to fetch evaluation data: {e}")
+        if hasattr(e, 'response') and e.response:
+            logger.error(f"Server response: {e.response.text}")
         return
 
     logger.info(f"Retrieved {len(eval_obs)} observations for scoring.")

@@ -35,14 +35,18 @@ def test_feed():
                     
                     if res["is_anomaly"] or res["label"] == "unknown":
                         f = res.get("features", {})
-                        print(f"ANOMALY:")
-                        print(f"  Duty Cycle: {f.get('duty_cycle', 0):.3f}")
-                        print(f"  Flatness  : {f.get('spectral_flatness', 0):.3f}")
-                        print(f"  ASK Ratio : {f.get('ask_ratio', 0):.3f}")
-                        print("-------------")
-                        anoms += 1
-                        if anoms >= 40:
-                            break
+                        if f.get('spectral_flatness', 0) < 0.3 and f.get('duty_cycle', 0) < 0.9:
+                            print(f"PULSED RADAR ANOMALY:")
+                            print(f"  Duty Cycle: {f.get('duty_cycle', 0):.3f}")
+                            print(f"  Flatness  : {f.get('spectral_flatness', 0):.3f}")
+                            print(f"  ASK Ratio : {f.get('ask_ratio', 0):.3f}")
+                            print(f"  Freq Linearity : {f.get('freq_linearity', 0):.3f}")
+                            print(f"  ZCR Amp   : {f.get('zcr_amp', 0):.3f}")
+                            print(f"  Phase Std : {f.get('phase_std', 0):.3f}")
+                            print("-------------")
+                            anoms += 1
+                            if anoms >= 20:
+                                break
     except Exception as e:
         print(f"Failed: {e}")
 

@@ -210,17 +210,19 @@ class GeolocatorEngine:
         if len(toa_obs) < 3:
             return None
 
-        # Sort by ToA to get reference receiver (first arrival)
-        sorted_obs = sorted(toa_obs, key=lambda o: o["time_of_arrival_ns"])
-        ref = sorted_obs[0]
+        # Anchor selection: Use highest-SNR/RSSI observation as reference for better stability
+        ref = max(toa_obs, key=lambda o: o.get("rssi_dbm", -999))
         ref_xy = self._rx_xy[ref["receiver_id"]]
+        
+        # Other observations (all except the reference)
+        other_obs = [o for o in toa_obs if o["receiver_id"] != ref["receiver_id"]]
 
         # Build system of hyperbolic equations
         # For each pair (ref, rx_i): (d_i - d_ref) = c * (t_i - t_ref)
         A_rows = []
         b_rows = []
 
-        for o in sorted_obs[1:]:
+        for o in other_obs:
             rx_id = o["receiver_id"]
             if rx_id not in self._rx_xy:
                 continue
@@ -249,7 +251,7 @@ class GeolocatorEngine:
         def tdoa_residuals(p):
             diffs = []
             d_ref = np.sqrt((p[0] - ref_xy[0])**2 + (p[1] - ref_xy[1])**2)
-            for o in sorted_obs[1:]:
+            for o in other_obs:
                 rx_id = o["receiver_id"]
                 if rx_id not in self._rx_xy:
                     continue
@@ -272,7 +274,7 @@ class GeolocatorEngine:
             uncertainty_m=round(min(residual_rms * 2, 2000.0), 1),
             method="tdoa",
             n_receivers=len(toa_obs),
-            gdop=self._compute_gdop(refined.x, np.array([self._rx_xy[o["receiver_id"]] for o in sorted_obs if o["receiver_id"] in self._rx_xy])),
+            gdop=self._compute_gdop(refined.x, np.array([self._rx_xy[o["receiver_id"]] for o in toa_obs if o["receiver_id"] in self._rx_xy])),
             residual=round(float(refined.cost), 2),
         )
 
@@ -288,9 +290,14 @@ class GeolocatorEngine:
         if rssi_result is None:
             return tdoa_result
 
-        # Weighted average if both succeed (TDoA is generally more accurate)
-        tdoa_weight = 0.7
-        rssi_weight = 0.3
+        # Inverse-variance weighting (Dynamic fusion)
+        # We favor the method with lower uncertainty
+        tdoa_var = max(tdoa_result.uncertainty_m, 5.0) ** 2
+        rssi_var = max(rssi_result.uncertainty_m, 5.0) ** 2
+        
+        inv_sum = (1.0 / tdoa_var) + (1.0 / rssi_var)
+        tdoa_weight = (1.0 / tdoa_var) / inv_sum
+        rssi_weight = (1.0 / rssi_var) / inv_sum
 
         tdoa_x, tdoa_y = latlon_to_xy(tdoa_result.latitude, tdoa_result.longitude, self._ref_lat, self._ref_lon)
         rssi_x, rssi_y = latlon_to_xy(rssi_result.latitude, rssi_result.longitude, self._ref_lat, self._ref_lon)
