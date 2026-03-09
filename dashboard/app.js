@@ -598,6 +598,10 @@ function addObservationToFeed(obs) {
 
     const item = document.createElement('div');
     item.className = 'obs-item';
+    item.style.cursor = 'pointer';
+    if (obs.track_id) {
+        item.onclick = () => selectTrack(obs.track_id);
+    }
     item.innerHTML = `
     <div class="obs-item-header">
       <span class="obs-rx">${obs.receiver_id ?? 'RX-?'}</span>
