@@ -1,11 +1,19 @@
-# Find My Force — RF COP System
+# 🛰️ Find My Force — RF COP System
+> **🥈 2nd Place Winner — UBC Defence Tech Hackathon 2026**
 
-RF Signal Classification & Geolocation — UBC Defence Tech Hackathon 2026
+A high-performance RF Signal Classification and Geolocation Common Operating Picture (COP) developed for the **LockedIn** challenge.
 
-## Quick Start
+## 🛠️ Core Technologies
+- **Deep Learning**: 1D-CNN (PyTorch) for raw IQ feature extraction
+- **Machine Learning**: Scikit-Learn Hybrid Ensemble (HistGradientBoosting + MLP + OC-SVM)
+- **Geolocation**: Multi-receiver TDoA & RSSI Trilateration with Kalman Filter smoothing
+- **Backend**: Flask + Socket.IO for real-time data orchestration
+- **Frontend**: Leaflet.js + custom tactical HUD (Glassmorphism & Neon UI)
+
+## ⚡ Quick Start
 
 ```bash
-# 1. Set up virtual environment (already done if you ran setup)
+# 1. Set up virtual environment
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -16,37 +24,37 @@ echo "API_KEY=your-team-api-key" >> .env
 # 3. Place training data in data/ directory
 #    Download the HDF5 file and put it at data/training.h5
 
-# 4. Train the classifier
+# 4. Train the Hybrid Classifier
 python3 main.py train
 
-# 5. Start the dashboard
+# 5. Start the tactical dashboard
 python3 main.py server --port 5050
 # → Open http://localhost:5050
 ```
 
-## Architecture
+## 🏗️ Architecture
 
 ```
 LockedIn_FindMyForce/
 ├── classifier/
-│   ├── signal_classifier.py    # ML pipeline: feature extraction + RF classifier + OCC anomaly detector
+│   ├── signal_classifier.py    # Hybrid Engine: Deep 1D-CNN + Expert Features + Ensemble
 │   └── __init__.py
 ├── pipeline/
-│   ├── geolocator.py           # RSSI trilateration, TDoA multilateration, Kalman filter
-│   ├── track_manager.py        # Persistent emitter track lifecycle management
-│   ├── associator.py           # Multi-receiver observation grouping
-│   ├── feed_consumer.py        # SSE stream consumer + submission manager
+│   ├── geolocator.py           # RSSI & TDoA trilateration + Kalman filtering
+│   ├── track_manager.py        # Persistent track lifecycle (Tentative -> Confirmed)
+│   ├── associator.py           # Multi-receiver pulse grouping (Temporal/IQ Similarity)
+│   ├── feed_consumer.py        # Real-time SSE stream consumption
 │   └── __init__.py
 ├── dashboard/
-│   ├── index.html              # COP dashboard
-│   ├── style.css               # Tactical dark UI
-│   └── app.js                  # Leaflet + Socket.IO frontend
-├── data/                       # Place training HDF5 here
-├── models/                     # Saved classifier (auto-created after training)
-├── server.py                   # Flask + Socket.IO backend
-├── main.py                     # CLI entry point
+│   ├── index.html              # Tactical HUD (Tailwind + Custom CSS)
+│   ├── style.css               # Premium "Find My Force" HUD styling
+│   └── app.js                  # Socket.IO & Leaflet map orchestration
+├── data/                       # RF training data (HDF5)
+├── models/                     # Saved model artifacts (.joblib + CNN weights)
+├── server.py                   # High-concurrency Flask/Socket.IO backend
+├── main.py                     # Unified CLI entry point
 ├── requirements.txt
-└── .env                        # API_KEY and API_URL
+└── .env                        # Configuration (Team API Key)
 ```
 
 ## CLI Commands
@@ -67,17 +75,20 @@ python3 main.py score
 
 ## ML Pipeline
 
-### Signal Classifier
-- **Feature extraction** (42 features): amplitude envelope stats, phase/frequency features, spectral analysis (FFT), pulsed signal detection, duty cycle, BPSK/FMCW/ASK pattern detection, IQ correlation
-- **Random Forest** (300 trees): classifies known friendly signal types
-- **One-Class SVM**: trained only on friendly data — detects out-of-distribution (hostile/civilian) signals as anomalies
+### Hybrid Signal Classifier
+- **Deep 1D-CNN**: Extracts 64-dimensional latent features directly from raw 256-sample IQ snapshots. Architecture includes multiple Conv1D layers, BatchNorm, and Dropout for robust representation learning.
+- **Feature Extraction (Manual)**: 42 expert-engineered features (spectral entropy, kurtosis, Phase Histogram, LPC coefficients, etc.).
+- **Hybrid Ensemble**: Concatenates deep CNN features with manual features, followed by a **Voting Ensemble** of HistGradientBoosting and MLP.
+- **One-Class SVM**: Trained on high-dimensional hybrid features of friendly data — detects hostile/civilian signals as anomalies.
 
 ### Training Procedure
-1. Load HDF5 data → extract 42-dim feature vectors
-2. Train RF classifier on friendly labels
-3. Train OC-SVM on friendly features only
-4. Calibrate anomaly threshold at 10th percentile of friendly OOD scores
-5. Save both models to `models/classifier.joblib`
+1. Load HDF5 data → extract raw IQ and 42 manual feature vectors.
+2. Train 1D-CNN on raw IQ to minimize Cross-Entropy loss for known classes.
+3. Freeze CNN and use as a deep feature extractor.
+4. Scale combined manual + deep features (Quantile Transformer).
+5. Train the Multi-class Ensemble on the hybrid feature space.
+6. Calibrate anomaly threshold at 15th percentile of friendly OOD scores.
+7. Save hybrid model bundle to `models/classifier.joblib`.
 
 ## Geolocation Engine
 

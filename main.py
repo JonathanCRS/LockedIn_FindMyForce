@@ -69,8 +69,8 @@ def cmd_train(args):
     print(f"Training on: {hdf5_path}")
 
     clf = SignalClassifier()
-    X, y = load_training_data(hdf5_path)
-    metrics = clf.train(X, y)
+    X_feat, X_raw, y = load_training_data(hdf5_path)
+    metrics = clf.train(X_feat, X_raw, y)
     clf.save()
 
     print("\n=== Training Results ===")
